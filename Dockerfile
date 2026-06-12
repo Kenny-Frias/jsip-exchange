@@ -48,13 +48,14 @@ RUN curl -fsSL \
         -o /usr/local/bin/opam \
     && chmod +x /usr/local/bin/opam
 
-# Initialise opam with the OxCaml repository layered over the default one
-# (ox first = higher priority), then create the OxCaml switch. Sandboxing is
-# disabled because bubblewrap does not work in an unprivileged container build.
+# Initialise opam (this registers the default repository), then create the
+# OxCaml switch with the OxCaml repository layered over the default one (ox
+# first = higher priority), mirroring the official OxCaml install command.
+# Sandboxing is disabled because bubblewrap does not work in an unprivileged
+# container build.
 RUN opam init --bare --disable-sandboxing \
-        --repositories \
-          ox=git+https://github.com/oxcaml/opam-repository.git,default=git+https://github.com/ocaml/opam-repository.git \
-    && opam switch create 5.2.0+ox ocaml-variants.5.2.0+ox
+    && opam switch create 5.2.0+ox ocaml-variants.5.2.0+ox \
+        --repos ox=git+https://github.com/oxcaml/opam-repository.git,default
 
 # Install the project's dependencies. Copying only the opam file first means
 # this expensive layer is reused as long as the dependency set is unchanged.
