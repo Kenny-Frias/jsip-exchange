@@ -74,3 +74,46 @@ let%expect_test "negative to_string_dollar" =
   print_endline (Price.to_string_dollar (Price.of_int_cents (-150)));
   [%expect {| -$1.50 |}]
 ;;
+
+let%expect_test "is_more_aggressive: Buy side (higher price is more \
+                 aggressive)"
+  =
+  let low_price = Price.of_int_cents 1000 in
+  let high_price = Price.of_int_cents 1500 in
+  (* Higher price is more aggressive than a lower price on Buy side *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Buy ~price:high_price ~than:low_price)
+    ~expect:true;
+  (* Lower price is NOT more aggressive than a higher price on Buy side *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Buy ~price:low_price ~than:high_price)
+    ~expect:false
+;;
+
+let%expect_test "is_more_aggressive: Sell side (lower price is more \
+                 aggressive)"
+  =
+  let low_price = Price.of_int_cents 1000 in
+  let high_price = Price.of_int_cents 1500 in
+  (* Lower price is more aggressive than a higher price on Sell side *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Sell ~price:low_price ~than:high_price)
+    ~expect:true;
+  (* Higher price is NOT more aggressive than a lower price on Sell side *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Sell ~price:high_price ~than:low_price)
+    ~expect:false
+;;
+
+let%expect_test "is_more_aggressive: edge cases (equal prices)" =
+  let price1 = Price.of_int_cents 1200 in
+  let price2 = Price.of_int_cents 1200 in
+  (* On Buy side, equal price should not be strictly more aggressive *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Buy ~price:price1 ~than:price2)
+    ~expect:false;
+  (* On Sell side, equal price should not be strictly more aggressive *)
+  [%test_result: bool]
+    (Price.is_more_aggressive Side.Sell ~price:price1 ~than:price2)
+    ~expect:false
+;;
