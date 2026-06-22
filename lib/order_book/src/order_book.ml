@@ -89,6 +89,7 @@ let find_match t incoming =
           ~resting_price:(Order.price resting))
       resting_orders
   in
+  (* TODO: abstract *)
   List.reduce marketable_resting_orders ~f:(fun order1 order2 ->
     let price1 = Order.price order1 in
     let price2 = Order.price order2 in
@@ -139,13 +140,31 @@ let best_bid_offer t : Bbo.t =
   { bid = best_level t Buy; ask = best_level t Sell }
 ;;
 
+(* NOTE: Needs to reflect real matching order and not just insertion order
+   TODO: Update so that the snapshot list levels in the same order that
+   matching would visit them: Highest price bids first, lowest price asks
+   first, and ties broken by arrival time
+
+   Currently, it maps orders to level.t and sorts them with Level.compare,
+   which only knows price and size. Sort the Order.t list first which a
+   comparator from Price.IMA and Order_id.compare, then map to level.t orders
+   --> sort --> compare
+
+   should wrote cpmpare outside the function *)
 let snapshot_side t (side : Side.t) =
-  let compare =
-    match side with
-    | Buy -> Comparable.reverse Level.compare
-    | Sell -> Level.compare
+  let orders = orders_on_side t side in
+  let is_more_aggressive_comparator order1 order2 =
+    let price1 = Order.price order1 in
+    let price2 = Order.price order2 in
+    if Price.equal price1 price2
+    then Order_id.compare (Order.order_id order1) (Order.order_id order2)
+    else if Price.is_more_aggressive side ~price:price1 ~than:price2
+    then 1
+    else -1
   in
-  orders_on_side t side |> List.map ~f:Level.of_order |> List.sort ~compare
+  orders
+  |> List.sort ~compare:is_more_aggressive_comparator
+  |> List.map ~f:Level.of_order
 ;;
 
 let snapshot t =
