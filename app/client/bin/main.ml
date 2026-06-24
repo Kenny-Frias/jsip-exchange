@@ -12,6 +12,9 @@ open Jsip_types
 open Jsip_gateway
 
 let run_client ~host ~port ~participant_name =
+  let all_str =
+    String.concat (List.map ~f:Time_in_force.to_string Time_in_force.all)
+  in
   let participant = Participant.of_string participant_name in
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port { host; port }
@@ -21,7 +24,7 @@ let run_client ~host ~port ~participant_name =
     [%string
       {|
 Connected to exchange at %{host}:%{port#Int} as %{participant#Participant}
-Commands: BUY|SELL <symbol> <size> <price> [IOC|DAY]
+Commands: BUY|SELL <symbol> <size> <price> %{all_str}
           BOOK <symbol>
           SUBSCRIBE <symbol>  (stream market data)
 
@@ -38,72 +41,37 @@ market-data feed.|}];
       let line = String.strip line in
       if String.is_empty line
       then loop ()
-      else if String.is_prefix line ~prefix:"BOOK"
-      then (
-        match String.chop_prefix line ~prefix:"BOOK " with
-        | None ->
-          print_endline "ERROR: expected BOOK <symbol>";
-          loop ()
-        | Some rest ->
-          let symbol =
-            Symbol.of_string (String.uppercase (String.strip rest))
-          in
-          let%bind result =
-            Rpc.Rpc.dispatch_exn Rpc_protocol.book_query_rpc conn symbol
-          in
-          (match result with
-           | None ->
-             print_endline [%string "No book available for %{symbol#Symbol}"]
-           | Some result -> print_endline (Book.to_string result));
-          loop ())
-      else if String.is_prefix line ~prefix:"SUBSCRIBE"
-      then (
-        match String.chop_prefix line ~prefix:"SUBSCRIBE " with
-        | None ->
-          print_endline "ERROR: expected SUBSCRIBE <symbol>";
-          loop ()
-        | Some rest ->
-          let symbol =
-            Symbol.of_string (String.uppercase (String.strip rest))
-          in
-          let%bind result =
-            Rpc.Pipe_rpc.dispatch
-              Rpc_protocol.market_data_rpc
-              conn
-              [ symbol ]
-          in
-          (match result with
-           | Error err | Ok (Error err) ->
-             print_endline
-               [%string "ERROR subscribing: %{Error.to_string_hum err}"];
-             loop ()
-           | Ok (Ok (reader, _id)) ->
-             print_endline
-               [%string
-                 {|
-Subscribed to %{symbol#Symbol} market data. Updates will appear below.
-Continue entering commands as normal.|}];
-             (* Read market data in the background; the command loop
-                continues running concurrently. *)
-             don't_wait_for
-               (Pipe.iter_without_pushback reader ~f:(fun event ->
-                  print_endline
-                    [%string "[MD] %{Protocol.format_event event}"]));
-             loop ()))
       else (
         match
-          Protocol.parse_command_with_default_participant
-            line
-            ~default:participant
+          Exchange_command.parse ~default_participant:participant line
         with
         | Error msg ->
-          print_endline [%string "ERROR: %{msg}"];
+          let msg_str = Error.to_string_hum msg in
+          print_endline [%string "ERROR: %{msg_str}"];
           loop ()
-        | Ok request ->
-          let%bind.Deferred.Or_error () =
-            Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc conn request
-          in
-          loop ())
+        | Ok result ->
+          (match result with
+           | Book sym ->
+             let%bind _ =
+               Rpc.Rpc.dispatch_exn Rpc_protocol.book_query_rpc conn sym
+             in
+             loop ()
+           | Subscribe sym ->
+             let%bind _ =
+               Rpc.Pipe_rpc.dispatch
+                 Rpc_protocol.market_data_rpc
+                 conn
+                 [ sym ]
+             in
+             loop ()
+           | Submit order_request ->
+             let%bind.Deferred.Or_error () =
+               Rpc.Rpc.dispatch_exn
+                 Rpc_protocol.submit_order_rpc
+                 conn
+                 order_request
+             in
+             loop ()))
   in
   loop ()
 ;;
