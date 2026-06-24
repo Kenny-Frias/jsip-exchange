@@ -134,7 +134,7 @@ let%expect_test "parse error: invalid price" =
 let%expect_test "parse error: unknown time-in-force" =
   print_parse "BUY AAPL 100 150.00 QQQ";
   [%expect
-    {| Error: ("Time_in_force.of_string: invalid string" (value QQQ) |}]
+    {| Error: ("Time_in_force.of_string: invalid string" (value QQQ)) |}]
 ;;
 
 (* --- parse_command_with_default_participant --- *)
