@@ -77,3 +77,7 @@ let%expect_test "audit-log RPC" =
     |}];
   return ()
 ;;
+(* let%expect_test "login RPC" = print_s
+   [%sexp (Rpc.Rpc.shapes Rpc_protocol.login_rpc : Async_rpc_kernel.Rpc_shapes.t)];
+   [%expect {| (Rpc (query 1234567890abcdef1234567890abcdef) (response 0987654321fedcba0987654321fedcba)) |}];
+   return () ;; *)

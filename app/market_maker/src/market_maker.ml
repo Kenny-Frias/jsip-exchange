@@ -17,6 +17,12 @@ end
 
 let seed_book (config : Config.t) conn =
   let submit request =
+    let%bind _logged_in =
+      Rpc.Rpc.dispatch_exn
+        Rpc_protocol.login_rpc
+        conn
+        (Participant.to_string config.participant)
+    in
     let%map result =
       Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc conn request
     in

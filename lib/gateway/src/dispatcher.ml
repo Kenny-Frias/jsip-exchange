@@ -6,11 +6,38 @@ type t =
   { market_data_subscribers_by_symbol :
       Exchange_event.t Pipe.Writer.t Bag.t Symbol.Table.t
   ; audit_subscribers : Exchange_event.t Pipe.Writer.t Bag.t
+  ; sessions : Session.t Participant.Table.t
   }
+
+let clean_up_session t session =
+  let participant = Session.participant session in
+  match Hashtbl.find t.sessions participant with
+  | None -> Deferred.unit
+  | Some _ ->
+    (* must wait for the pipe to close, which is why we use deffered *)
+    let%bind () = Session.close session in
+    Hashtbl.remove t.sessions participant;
+    Deferred.return ()
+;;
+
+(* if session already running, clean up the session and create a new one *)
+let set_up_session t participant =
+  match Hashtbl.find t.sessions participant with
+  | Some session ->
+    let%bind () = clean_up_session t session in
+    let new_session = Session.create participant in
+    Hashtbl.set t.sessions ~key:participant ~data:new_session;
+    Deferred.return ()
+  | None ->
+    let new_session = Session.create participant in
+    Hashtbl.set t.sessions ~key:participant ~data:new_session;
+    Deferred.return ()
+;;
 
 let create () =
   { market_data_subscribers_by_symbol = Symbol.Table.create ()
   ; audit_subscribers = Bag.create ()
+  ; sessions = Participant.Table.create ()
   }
 ;;
 
@@ -62,13 +89,9 @@ let push_audit t event =
 ;;
 
 let push_to_session t participant event =
-  (* TODO: Once sessions have been implemented this function should write the
-     event to the appropriate session's pipe. For now we have the server
-     binary print these events to stdout while tests can silence them. *)
-  ignore t;
-  print_endline
-    [%string
-      "[for %{participant#Participant}] %{Protocol.format_event event}"]
+  let _ = set_up_session t participant in
+  let session_ref = Hashtbl.find_exn t.sessions participant in
+  Session.push session_ref event
 ;;
 
 let dispatch_event t (event : Exchange_event.t) =

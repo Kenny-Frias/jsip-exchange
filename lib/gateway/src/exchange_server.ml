@@ -3,6 +3,12 @@ open! Async
 open Jsip_types
 open Jsip_order_book
 
+module Connection_state = struct
+  type t = { mutable session : Session.t option }
+
+  (* let participant t = Option.map t.session ~f:Session.participant *)
+end
+
 type t =
   { engine : Matching_engine.t
   ; dispatcher : Dispatcher.t
@@ -30,6 +36,13 @@ let start_matching_loop ~engine ~dispatcher request_reader =
        Dispatcher.dispatch dispatcher events))
 ;;
 
+(* Currently, each connection state is just unit. TODO: need the state to
+   hold something mutable (the connections Session.t) *)
+
+let is_participant_logged_in (state : Connection_state.t) =
+  match state.session with None -> false | Some _ -> true
+;;
+
 let start ~symbols ~port () =
   let engine = Matching_engine.create symbols in
   let dispatcher = Dispatcher.create () in
@@ -41,13 +54,34 @@ let start ~symbols ~port () =
       ~implementations:
         [ Rpc.Rpc.implement
             Rpc_protocol.submit_order_rpc
-            (fun state request ->
+            (* we need to check that the connection state participant matches
+               the participant in the request. If they don't match, we create
+               a new request with the actual sessions participant name *)
+            (fun (state : Connection_state.t) request ->
+               if is_participant_logged_in state
+               then (
+                 let session_participant =
+                   Session.participant (Option.value_exn state.session)
+                 in
+                 let corrected_request =
+                   if Participant.equal
+                        session_participant
+                        request.participant
+                   then request
+                   else { request with participant = session_participant }
+                 in
+                 handle_submit ~request_writer corrected_request)
+               else
+                 return
+                   (Or_error.error_string
+                      "Participant not logged in. Please login before \
+                       submitting orders."))
+        ; Rpc.Rpc.implement'
+            Rpc_protocol.book_query_rpc
+            (fun (state : Connection_state.t) symbol ->
                ignore state;
-               handle_submit ~request_writer request)
-        ; Rpc.Rpc.implement' Rpc_protocol.book_query_rpc (fun state symbol ->
-            ignore state;
-            Matching_engine.book engine symbol
-            |> Option.map ~f:Order_book.snapshot)
+               Matching_engine.book engine symbol
+               |> Option.map ~f:Order_book.snapshot)
         ; Rpc.Pipe_rpc.implement
             Rpc_protocol.market_data_rpc
             (fun state symbols ->
@@ -60,14 +94,34 @@ let start ~symbols ~port () =
             ignore state;
             let reader = Dispatcher.subscribe_audit dispatcher in
             return (Ok reader))
+        ; Rpc.Rpc.implement
+            Rpc_protocol.login_rpc
+            (fun (state : Connection_state.t) participant_name ->
+               let trimmed = String.strip participant_name in
+               if String.length trimmed > 0
+               then (
+                 let participant = Participant.of_string trimmed in
+                 let session = Session.create participant in
+                 state.session <- Some session;
+                 let%bind () =
+                   Dispatcher.set_up_session dispatcher participant
+                 in
+                 Deferred.return (Ok participant))
+               else
+                 return
+                   (Or_error.error_string
+                      [%string
+                        "Invalid participant name: %{participant_name}"]))
         ]
       ~on_unknown_rpc:`Close_connection
       ~on_exception:Log_on_background_exn
   in
   let%map tcp_server =
+    let initial_connection_state = { Connection_state.session = None } in
     Rpc.Connection.serve
       ~implementations
-      ~initial_connection_state:(fun _addr _conn -> ())
+        (* instead of unit, want to hold the connections session *)
+      ~initial_connection_state:(fun _addr _conn -> initial_connection_state)
       ~where_to_listen:(Tcp.Where_to_listen.of_port port)
       ()
   in

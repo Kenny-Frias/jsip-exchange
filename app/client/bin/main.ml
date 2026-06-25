@@ -65,6 +65,13 @@ market-data feed.|}];
              in
              loop ()
            | Submit order_request ->
+             (* call loginrpc and THEN submit order *)
+             let%bind _logged_in =
+               Rpc.Rpc.dispatch_exn
+                 Rpc_protocol.login_rpc
+                 conn
+                 (Participant.to_string participant)
+             in
              let%bind.Deferred.Or_error () =
                Rpc.Rpc.dispatch_exn
                  Rpc_protocol.submit_order_rpc
