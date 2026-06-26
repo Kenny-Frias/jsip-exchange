@@ -21,7 +21,7 @@ type client
 (** Connect a client to [port]. The [participant] argument is accepted for
     forward-compatibility with the planned login RPC but is currently ignored
     — the server does not yet associate connections with participants. *)
-val connect_as : port:int -> Participant.t -> client Deferred.t
+val connect_as : port:int -> Jsip_types.Participant.t -> client Deferred.t
 
 (** The raw RPC connection, useful for tests that exercise unusual RPC paths
     (audit log subscriptions, second clients on the same connection, etc.). *)

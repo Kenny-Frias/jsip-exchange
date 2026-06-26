@@ -20,18 +20,18 @@ let clean_up_session t session =
     Deferred.return ()
 ;;
 
+let get_session t participant = Hashtbl.find_exn t.sessions participant
+
 (* if session already running, clean up the session and create a new one *)
 let set_up_session t participant =
-  match Hashtbl.find t.sessions participant with
-  | Some session ->
-    let%bind () = clean_up_session t session in
-    let new_session = Session.create participant in
-    Hashtbl.set t.sessions ~key:participant ~data:new_session;
-    Deferred.return ()
-  | None ->
-    let new_session = Session.create participant in
-    Hashtbl.set t.sessions ~key:participant ~data:new_session;
-    Deferred.return ()
+  let%bind () =
+    match Hashtbl.find t.sessions participant with
+    | Some session -> clean_up_session t session
+    | None -> return ()
+  in
+  let new_session = Session.create participant in
+  Hashtbl.set t.sessions ~key:participant ~data:new_session;
+  Deferred.return ()
 ;;
 
 let create () =

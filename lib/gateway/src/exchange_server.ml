@@ -39,10 +39,6 @@ let start_matching_loop ~engine ~dispatcher request_reader =
 (* Currently, each connection state is just unit. TODO: need the state to
    hold something mutable (the connections Session.t) *)
 
-let is_participant_logged_in (state : Connection_state.t) =
-  match state.session with None -> false | Some _ -> true
-;;
-
 let start ~symbols ~port () =
   let engine = Matching_engine.create symbols in
   let dispatcher = Dispatcher.create () in
@@ -58,17 +54,13 @@ let start ~symbols ~port () =
                the participant in the request. If they don't match, we create
                a new request with the actual sessions participant name *)
             (fun (state : Connection_state.t) request ->
-               if is_participant_logged_in state
+               if Option.is_some state.session
                then (
                  let session_participant =
                    Session.participant (Option.value_exn state.session)
                  in
                  let corrected_request =
-                   if Participant.equal
-                        session_participant
-                        request.participant
-                   then request
-                   else { request with participant = session_participant }
+                   { request with participant = session_participant }
                  in
                  handle_submit ~request_writer corrected_request)
                else
@@ -101,17 +93,32 @@ let start ~symbols ~port () =
                if String.length trimmed > 0
                then (
                  let participant = Participant.of_string trimmed in
-                 let session = Session.create participant in
-                 state.session <- Some session;
                  let%bind () =
                    Dispatcher.set_up_session dispatcher participant
                  in
+                 let session =
+                   Dispatcher.get_session dispatcher participant
+                 in
+                 state.session <- Some session;
                  Deferred.return (Ok participant))
                else
                  return
                    (Or_error.error_string
                       [%string
                         "Invalid participant name: %{participant_name}"]))
+          (* reads the connection state, fails with not logged in if no
+             session exists, and otherwise returns the sessions
+             pipe.reader.t. It subscribes once after login and drains the
+             pipe forever after. *)
+        ; Rpc.Pipe_rpc.implement
+            Rpc_protocol.session_feed_rpc
+            (fun (state : Connection_state.t) () ->
+               match state.session with
+               | None ->
+                 return (Or_error.error_string "Participant not logged in.")
+               | Some session ->
+                 let reader = Session.reader session in
+                 return (Ok reader))
         ]
       ~on_unknown_rpc:`Close_connection
       ~on_exception:Log_on_background_exn

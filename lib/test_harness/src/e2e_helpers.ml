@@ -12,12 +12,26 @@ let with_server ~symbols f =
 
 type client = { conn : Rpc.Connection.t }
 
-let connect_as ~port _participant =
+let connect_as ~port (participant : Jsip_types.Participant.t) =
   let where =
     Tcp.Where_to_connect.of_host_and_port { host = "localhost"; port }
   in
-  let%map conn = Rpc.Connection.client where >>| Result.ok_exn in
-  { conn }
+  (* if use map, cant use bind below *)
+  let%bind conn = Rpc.Connection.client where >>| Result.ok_exn in
+  let%bind _logged_in =
+    Rpc.Rpc.dispatch_exn
+      Rpc_protocol.login_rpc
+      conn
+      (Jsip_types.Participant.to_string participant)
+  in
+  let%bind session_feed, _metadata =
+    Rpc.Pipe_rpc.dispatch_exn Rpc_protocol.session_feed_rpc conn ()
+  in
+  don't_wait_for
+    (Pipe.iter_without_pushback session_feed ~f:(fun event ->
+       let e = Protocol.format_event event in
+       print_endline [%string "[%{participant#Jsip_types.Participant}] %{e}"]));
+  Deferred.return { conn }
 ;;
 
 let connection client = client.conn
@@ -26,6 +40,8 @@ let rpc_submit client request =
   Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc client.conn request
   >>| ok_exn
 ;;
+
+(* *)
 
 let rpc_book client symbol =
   Rpc.Rpc.dispatch_exn Rpc_protocol.book_query_rpc client.conn symbol

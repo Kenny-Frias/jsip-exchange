@@ -2,6 +2,16 @@ open! Core
 open! Async
 open Jsip_types
 
+let session_feed_rpc =
+  Rpc.Pipe_rpc.create
+    ~name:"session-feed"
+    ~version:1
+    ~bin_query:Unit.bin_t
+    ~bin_response:Exchange_event.bin_t
+    ~bin_error:Error.bin_t
+    ()
+;;
+
 let login_rpc =
   Rpc.Rpc.create
     ~name:"login"

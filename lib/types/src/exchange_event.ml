@@ -28,6 +28,23 @@ type t =
       }
 [@@deriving sexp, bin_io]
 
+let to_string_hum event =
+  match event with
+  | Order_accept { order_id; request } ->
+    [%string "Order accept: %{order_id#Order_id} %{request#Order.Request}"]
+  | Fill fill -> [%string "Fill: %{fill#Fill}"]
+  | Order_cancel { order_id; participant; symbol; remaining_size; reason } ->
+    [%string
+      "Order cancel: %{order_id#Order_id} %{participant#Participant} \
+       %{symbol#Symbol} %{remaining_size#Size} %{reason#Cancel_reason}"]
+  | Order_reject { request; reason } ->
+    [%string "Order reject: %{request#Order.Request} %{reason#String}"]
+  | Best_bid_offer_update { symbol; bbo } ->
+    [%string "Best bid/offer update: %{symbol#Symbol} %{bbo#Bbo}"]
+  | Trade_report { symbol; price; size } ->
+    [%string "Trade report: %{symbol#Symbol} %{price#Price} %{size#Size}"]
+;;
+
 let is_market_data = function
   | Best_bid_offer_update _ | Trade_report _ -> true
   | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _ -> false

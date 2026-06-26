@@ -45,3 +45,5 @@ val is_market_data : t -> bool
 (** The symbol associated with market data events, or [None] for
     non-market-data events. *)
 val symbol_of_market_data : t -> Symbol.t option
+
+val to_string_hum : t -> string

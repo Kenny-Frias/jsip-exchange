@@ -60,3 +60,5 @@ val set_up_session : t -> Participant.t -> unit Deferred.t
 module For_testing : sig
   val audit_subscriber_count : t -> int
 end
+
+val get_session : t -> Participant.t -> Session.t

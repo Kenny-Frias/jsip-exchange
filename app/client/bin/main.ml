@@ -65,13 +65,30 @@ market-data feed.|}];
              in
              loop ()
            | Submit order_request ->
-             (* call loginrpc and THEN submit order *)
+             (* call loginrpc and THEN dispatch session_feed_rpc and print
+                the events it recieves + submit order *)
              let%bind _logged_in =
                Rpc.Rpc.dispatch_exn
                  Rpc_protocol.login_rpc
                  conn
                  (Participant.to_string participant)
              in
+             (* session feed returns tuple of pipe and metadata, seperate
+                them *)
+             let%bind session_feed_pipe_reader, _metadata =
+               Rpc.Pipe_rpc.dispatch_exn
+                 Rpc_protocol.session_feed_rpc
+                 conn
+                 ()
+             in
+             (* don't want to block our function by waiting for a deferr0ed
+                to complete *)
+             don't_wait_for
+               (Pipe.iter_without_pushback
+                  session_feed_pipe_reader
+                  ~f:(fun event ->
+                    print_endline
+                      [%string "%{Exchange_event.to_string_hum event}"]));
              let%bind.Deferred.Or_error () =
                Rpc.Rpc.dispatch_exn
                  Rpc_protocol.submit_order_rpc
