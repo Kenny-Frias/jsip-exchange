@@ -9,3 +9,10 @@ module Generator : sig
   val create : unit -> t
   val next : t -> client_order_id
 end
+
+module Registry : sig
+  val used : (t, unit) Hashtbl.t
+  val register : t -> unit Or_error.t
+  val unregister : t -> unit
+  val is_used : t -> bool
+end
