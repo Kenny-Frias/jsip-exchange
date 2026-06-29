@@ -12,6 +12,7 @@ type t =
       ; symbol : Symbol.t
       ; remaining_size : Size.t
       ; reason : Cancel_reason.t
+      ; client_order_id : Client_order_id.t
       }
   | Order_reject of
       { request : Order.Request.t
@@ -33,10 +34,18 @@ let to_string_hum event =
   | Order_accept { order_id; request } ->
     [%string "Order accept: %{order_id#Order_id} %{request#Order.Request}"]
   | Fill fill -> [%string "Fill: %{fill#Fill}"]
-  | Order_cancel { order_id; participant; symbol; remaining_size; reason } ->
+  | Order_cancel
+      { order_id
+      ; participant
+      ; symbol
+      ; remaining_size
+      ; reason
+      ; client_order_id
+      } ->
     [%string
       "Order cancel: %{order_id#Order_id} %{participant#Participant} \
-       %{symbol#Symbol} %{remaining_size#Size} %{reason#Cancel_reason}"]
+       %{symbol#Symbol} %{remaining_size#Size} %{reason#Cancel_reason} \
+       %{client_order_id#Client_order_id}"]
   | Order_reject { request; reason } ->
     [%string "Order reject: %{request#Order.Request} %{reason#String}"]
   | Best_bid_offer_update { symbol; bbo } ->

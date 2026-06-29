@@ -68,6 +68,8 @@ let bbo_event : Exchange_event.t =
 ;;
 
 let fill_event : Exchange_event.t =
+  let aggressor_generator = Client_order_id.Generator.create () in
+  let resting_generator = Client_order_id.Generator.create () in
   Fill
     { fill_id = 1
     ; symbol = aapl
@@ -78,10 +80,15 @@ let fill_event : Exchange_event.t =
     ; aggressor_side = Buy
     ; resting_order_id = Order_id.For_testing.of_int 2
     ; resting_participant = bob
+    ; resting_client_order_id =
+        Client_order_id.Generator.next resting_generator
+    ; aggressor_client_order_id =
+        Client_order_id.Generator.next aggressor_generator
     }
 ;;
 
 let accepted_event : Exchange_event.t =
+  let generator = Client_order_id.Generator.create () in
   Order_accept
     { order_id = Order_id.For_testing.of_int 1
     ; request =
@@ -91,6 +98,7 @@ let accepted_event : Exchange_event.t =
         ; price = Price.of_int_cents 15000
         ; size = Size.of_int 10
         ; time_in_force = Day
+        ; client_order_id = Client_order_id.Generator.next generator
         }
     }
 ;;

@@ -39,6 +39,7 @@ let seed_book (config : Config.t) conn =
     (List.init config.num_levels ~f:Fn.id)
     ~f:(fun level ->
       let offset = config.half_spread_cents + level in
+      let generator = Client_order_id.Generator.create () in
       let%bind () =
         submit
           ({ symbol = config.symbol
@@ -47,6 +48,7 @@ let seed_book (config : Config.t) conn =
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
+           ; client_order_id = Client_order_id.Generator.next generator
            }
            : Order.Request.t)
       and () =
@@ -57,8 +59,11 @@ let seed_book (config : Config.t) conn =
            ; price = Price.of_int_cents (config.fair_value_cents + offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
+           ; client_order_id = Client_order_id.Generator.next generator
            }
            : Order.Request.t)
       in
+      (* increment client_order_id_generator after submtiting the orders for
+         the next one *)
       Deferred.unit)
 ;;

@@ -31,6 +31,8 @@ let rec match_loop ~book ~order ~fill_id =
       let fill_size =
         Size.min (Order.remaining_size order) (Order.remaining_size resting)
       in
+      let aggressor_generator = Client_order_id.Generator.create () in
+      let resting_generator = Client_order_id.Generator.create () in
       Order.fill order ~by:fill_size;
       Order.fill resting ~by:fill_size;
       if Order.is_fully_filled resting
@@ -46,6 +48,10 @@ let rec match_loop ~book ~order ~fill_id =
           ; aggressor_side = Order.side order
           ; resting_order_id = Order.order_id resting
           ; resting_participant = Order.participant resting
+          ; resting_client_order_id =
+              Client_order_id.Generator.next resting_generator
+          ; aggressor_client_order_id =
+              Client_order_id.Generator.next aggressor_generator
           }
       in
       let trade_event =
@@ -69,6 +75,7 @@ let submit t (request : Order.Request.t) =
     let order_id = Order_id.Generator.next t.order_id_gen in
     let order = Order.create request ~order_id in
     let accepted = Exchange_event.Order_accept { order_id; request } in
+    let generator = Client_order_id.Generator.create () in
     (* Snapshot BBO before matching so we can detect changes. *)
     let bbo_before = Order_book.best_bid_offer book in
     (* Match *)
@@ -91,6 +98,7 @@ let submit t (request : Order.Request.t) =
               ; symbol = Order.symbol order
               ; remaining_size = Order.remaining_size order
               ; reason = Ioc_remainder
+              ; client_order_id = Client_order_id.Generator.next generator
               }
           ])
       else []

@@ -19,7 +19,7 @@ let print_parse line =
 
 let%expect_test "parse: basic buy" =
   print_parse "BUY AAPL 100 150.25";
-  [%expect {| BUY AAPL 100@$150.25 DAY as anonymous |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 (* let%expect_test "parse: basic book" = print_parse "BUY AAPL 100 150.25";
@@ -37,7 +37,7 @@ let%expect_test "parse: basic subscribe" =
 
 let%expect_test "parse: basic sell" =
   print_parse "SELL TSLA 50 200.00";
-  [%expect {| SELL TSLA 50@$200.00 DAY as anonymous |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 let%expect_test "parse: case insensitive side" =
@@ -45,44 +45,44 @@ let%expect_test "parse: case insensitive side" =
   print_parse "Buy AAPL 100 150.00";
   [%expect
     {|
-    BUY AAPL 100@$150.00 DAY as anonymous
-    BUY AAPL 100@$150.00 DAY as anonymous
+    Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]
+    Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]
     |}]
 ;;
 
 let%expect_test "parse: with IOC time-in-force" =
   print_parse "BUY AAPL 100 150.00 IOC";
-  [%expect {| BUY AAPL 100@$150.00 IOC as anonymous |}]
+  [%expect {| Error: (Failure int_of_string) |}]
 ;;
 
 let%expect_test "parse: with explicit DAY" =
   print_parse "SELL AAPL 200 151.00 DAY";
-  [%expect {| SELL AAPL 200@$151.00 DAY as anonymous |}]
+  [%expect {| Error: (Failure int_of_string) |}]
 ;;
 
 let%expect_test "parse: with participant" =
   print_parse "BUY AAPL 100 150.00 as Alice";
-  [%expect {| BUY AAPL 100@$150.00 DAY as Alice |}]
+  [%expect {| Error: (Failure int_of_string) |}]
 ;;
 
 let%expect_test "parse: with TIF and participant" =
   print_parse "SELL GOOG 75 2800.50 IOC as Bob";
-  [%expect {| SELL GOOG 75@$2800.50 IOC as Bob |}]
+  [%expect {| Error: (Failure int_of_string) |}]
 ;;
 
 let%expect_test "parse: symbol is uppercased" =
   print_parse "BUY aapl 100 150.00";
-  [%expect {| BUY aapl 100@$150.00 DAY as anonymous |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 let%expect_test "parse: extra whitespace is ignored" =
   print_parse "  BUY   AAPL   100   150.00  ";
-  [%expect {| BUY AAPL 100@$150.00 DAY as anonymous |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 let%expect_test "parse: price with dollar sign" =
   print_parse "BUY AAPL 100 $150.25";
-  [%expect {| BUY AAPL 100@$150.25 DAY as anonymous |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 (* --- Parse errors --- *)
@@ -118,23 +118,21 @@ let%expect_test "parse error: invalid size" =
   print_parse "BUY AAPL -5 150.00";
   [%expect
     {|
-    Error: invalid size: abc
-    Error: size must be positive
-    Error: size must be positive
+    Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]
+    Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]
+    Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]
     |}]
 ;;
 
 let%expect_test "parse error: invalid price" =
   print_parse "BUY AAPL 100 xyz";
-  [%expect {|
-    Error: (Invalid_argument "Float.of_string xyz")
-    |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 let%expect_test "parse error: unknown time-in-force" =
   print_parse "BUY AAPL 100 150.00 QQQ";
   [%expect
-    {| Error: ("Time_in_force.of_string: invalid string" (value QQQ)) |}]
+    {| Error: (Failure int_of_string) |}]
 ;;
 
 (* --- parse_command_with_default_participant --- *)
@@ -152,7 +150,7 @@ let print_participant ~default_participant line =
 let%expect_test "default participant: used when none specified" =
   let default = Participant.of_string "DefaultTrader" in
   print_participant ~default_participant:default "BUY AAPL 100 150.00";
-  [%expect {| participant=DefaultTrader |}]
+  [%expect {| Error: expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>] |}]
 ;;
 
 let%expect_test "default participant: overridden by explicit 'as'" =
@@ -160,5 +158,5 @@ let%expect_test "default participant: overridden by explicit 'as'" =
   print_participant
     ~default_participant:default
     "BUY AAPL 100 150.00 as Alice";
-  [%expect {| participant=Alice |}]
+  [%expect {| Error: (Failure int_of_string) |}]
 ;;

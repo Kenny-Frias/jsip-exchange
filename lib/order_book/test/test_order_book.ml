@@ -11,6 +11,7 @@ let make_order
   ?(participant = Harness.alice)
   ()
   =
+  let generator = Client_order_id.Generator.create () in
   Order.create
     ({ symbol = Harness.aapl
      ; participant
@@ -18,6 +19,7 @@ let make_order
      ; price = Price.of_int_cents price_cents
      ; size = Size.of_int size
      ; time_in_force = Day
+     ; client_order_id = Client_order_id.Generator.next generator
      }
      : Order.Request.t)
     ~order_id:(Order_id.For_testing.of_int order_id)

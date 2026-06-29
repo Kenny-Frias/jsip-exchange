@@ -32,6 +32,7 @@ let make_request
   ?(symbol = aapl)
   ?(participant = alice)
   ?(time_in_force = Time_in_force.Day)
+  ?(client_order_id = 42)
   ()
   : Order.Request.t
   =
@@ -41,6 +42,7 @@ let make_request
   ; price = Price.of_int_cents price_cents
   ; size = Size.of_int size
   ; time_in_force
+  ; client_order_id
   }
 ;;
 
@@ -100,8 +102,12 @@ let sample_events : Exchange_event.t list =
     ; price = Price.of_int_cents 15000
     ; size = Size.of_int 100
     ; time_in_force = Day
+    ; client_order_id = 42
     }
   in
+  let aggressor_generator = Client_order_id.Generator.create () in
+  let resting_generator = Client_order_id.Generator.create () in
+  let generator = Client_order_id.Generator.create () in
   [ Order_accept
       { order_id = Order_id.For_testing.of_int 1; request = order_request }
   ; Fill
@@ -114,6 +120,10 @@ let sample_events : Exchange_event.t list =
       ; aggressor_side = Buy
       ; resting_order_id = Order_id.For_testing.of_int 1
       ; resting_participant = bob
+      ; resting_client_order_id =
+          Client_order_id.Generator.next resting_generator
+      ; aggressor_client_order_id =
+          Client_order_id.Generator.next aggressor_generator
       }
   ; Order_cancel
       { order_id = Order_id.For_testing.of_int 1
@@ -121,6 +131,7 @@ let sample_events : Exchange_event.t list =
       ; symbol = aapl
       ; remaining_size = Size.of_int 50
       ; reason = Ioc_remainder
+      ; client_order_id = Client_order_id.Generator.next generator
       }
   ; Order_reject { request = order_request; reason = "unknown symbol" }
   ; Best_bid_offer_update

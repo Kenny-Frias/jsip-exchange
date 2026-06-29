@@ -51,6 +51,7 @@ let bob = Participant.of_string "Bob"
 let book_with_n_asks ?(min_price = 10_000) n =
   let book = Order_book.create aapl in
   let gen = Order_id.Generator.create () in
+  let generator = Client_order_id.Generator.create () in
   for i = 1 to n do
     let order =
       Order.create
@@ -60,6 +61,7 @@ let book_with_n_asks ?(min_price = 10_000) n =
         ; price = Price.of_int_cents (min_price + i)
         ; size = Size.of_int 100
         ; time_in_force = Day
+        ; client_order_id = Client_order_id.Generator.next generator
         }
         ~order_id:(Order_id.Generator.next gen)
     in
@@ -71,6 +73,7 @@ let book_with_n_asks ?(min_price = 10_000) n =
 (** Build a matching engine with [n] resting sells on AAPL. *)
 let engine_with_n_asks ?(min_price = 10_000) n =
   let engine = Matching_engine.create [ aapl ] in
+  let generator = Client_order_id.Generator.create () in
   for i = 1 to n do
     ignore
       (Matching_engine.submit
@@ -81,6 +84,7 @@ let engine_with_n_asks ?(min_price = 10_000) n =
          ; price = Price.of_int_cents (min_price + i)
          ; size = Size.of_int 100
          ; time_in_force = Day
+         ; client_order_id = Client_order_id.Generator.next generator
          }
        : Exchange_event.t list)
   done;
@@ -94,6 +98,7 @@ let engine_with_n_asks ?(min_price = 10_000) n =
 let bench_find_match ~n =
   let min_price = 10_000 in
   let book, gen = book_with_n_asks ~min_price n in
+  let generator = Client_order_id.Generator.create () in
   (* Incoming buy at a price that matches the best ask *)
   let incoming =
     Order.create
@@ -103,6 +108,7 @@ let bench_find_match ~n =
       ; price = Price.of_int_cents (min_price + n)
       ; size = Size.of_int 100
       ; time_in_force = Ioc
+      ; client_order_id = Client_order_id.Generator.next generator
       }
       ~order_id:(Order_id.Generator.next gen)
   in
@@ -113,6 +119,7 @@ let bench_find_match ~n =
 let bench_find_match_no_cross ~n =
   let min_price = 10_000 in
   let book, gen = book_with_n_asks ~min_price n in
+  let generator = Client_order_id.Generator.create () in
   (* Incoming buy at a price below all asks — no match possible *)
   let incoming =
     Order.create
@@ -122,6 +129,7 @@ let bench_find_match_no_cross ~n =
       ; price = Price.of_int_cents (min_price - 1)
       ; size = Size.of_int 100
       ; time_in_force = Ioc
+      ; client_order_id = Client_order_id.Generator.next generator
       }
       ~order_id:(Order_id.Generator.next gen)
   in
@@ -139,6 +147,7 @@ let bench_add_remove ~n =
   (* Pre-build the book, then measure add+remove cycle *)
   let min_price = 10_000 in
   let book, gen = book_with_n_asks ~min_price n in
+  let generator = Client_order_id.Generator.create () in
   let order =
     Order.create
       { symbol = aapl
@@ -147,6 +156,7 @@ let bench_add_remove ~n =
       ; price = Price.of_int_cents (min_price + 500)
       ; size = Size.of_int 100
       ; time_in_force = Day
+      ; client_order_id = Client_order_id.Generator.next generator
       }
       ~order_id:(Order_id.Generator.next gen)
   in
@@ -168,6 +178,7 @@ let bench_submit_ioc_cross ~n =
   let max_price = 20_000 in
   let engine = engine_with_n_asks ~min_price n in
   let next_price = ref (min_price + 1) in
+  let generator = Client_order_id.Generator.create () in
   Bench.Test.create
     ~name:[%string "submit_ioc_cross (n=%{n#Int})"]
     (fun () ->
@@ -180,6 +191,7 @@ let bench_submit_ioc_cross ~n =
            ; price = Price.of_int_cents max_price
            ; size = Size.of_int 100
            ; time_in_force = Ioc
+           ; client_order_id = Client_order_id.Generator.next generator
            }
        in
        ignore (events : Exchange_event.t list);
@@ -193,6 +205,7 @@ let bench_submit_ioc_cross ~n =
             ; price = Price.of_int_cents !next_price
             ; size = Size.of_int 100
             ; time_in_force = Day
+            ; client_order_id = Client_order_id.Generator.next generator
             }
           : Exchange_event.t list);
        next_price := !next_price + 1;
@@ -201,6 +214,7 @@ let bench_submit_ioc_cross ~n =
 
 let bench_submit_ioc_no_match ~n =
   let min_price = 10_000 in
+  let generator = Client_order_id.Generator.create () in
   let engine = engine_with_n_asks ~min_price n in
   Bench.Test.create ~name:[%string "submit_ioc_miss (n=%{n#Int})"] (fun () ->
     ignore
@@ -212,6 +226,7 @@ let bench_submit_ioc_no_match ~n =
          ; price = Price.of_int_cents (min_price - 1)
          ; size = Size.of_int 100
          ; time_in_force = Ioc
+         ; client_order_id = Client_order_id.Generator.next generator
          }
        : Exchange_event.t list))
 ;;
@@ -221,6 +236,7 @@ let bench_submit_sweep ~n =
      Re-seeds the book after each sweep. This is worst-case: every resting
      order is visited and filled. *)
   let engine = ref (engine_with_n_asks n) in
+  let generator = Client_order_id.Generator.create () in
   Bench.Test.create ~name:[%string "submit_sweep_%{n#Int}_levels"] (fun () ->
     ignore
       (Matching_engine.submit
@@ -231,6 +247,7 @@ let bench_submit_sweep ~n =
          ; price = Price.of_int_cents 99_999
          ; size = Size.of_int (n * 100)
          ; time_in_force = Ioc
+         ; client_order_id = Client_order_id.Generator.next generator
          }
        : Exchange_event.t list);
     (* Re-seed entire book *)
@@ -244,6 +261,7 @@ let bench_submit_sweep ~n =
 let bench_find_match_alloc ~n =
   let min_price = 10_000 in
   let book, gen = book_with_n_asks ~min_price n in
+  let generator = Client_order_id.Generator.create () in
   let incoming =
     Order.create
       { symbol = aapl
@@ -252,6 +270,7 @@ let bench_find_match_alloc ~n =
       ; price = Price.of_int_cents (min_price + n)
       ; size = Size.of_int 100
       ; time_in_force = Ioc
+      ; client_order_id = Client_order_id.Generator.next generator
       }
       ~order_id:(Order_id.Generator.next gen)
   in

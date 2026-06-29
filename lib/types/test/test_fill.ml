@@ -2,6 +2,8 @@ open! Core
 open Jsip_types
 
 let%expect_test "notional_cents: price * size" =
+  let aggressor_generator = Client_order_id.Generator.create () in
+  let resting_generator = Client_order_id.Generator.create () in
   let fill =
     ({ fill_id = 1
      ; symbol = Symbol.of_string "AAPL"
@@ -12,6 +14,10 @@ let%expect_test "notional_cents: price * size" =
      ; aggressor_side = Buy
      ; resting_order_id = Order_id.of_string "2"
      ; resting_participant = Participant.of_string "Bob"
+     ; resting_client_order_id =
+         Client_order_id.Generator.next resting_generator
+     ; aggressor_client_order_id =
+         Client_order_id.Generator.next aggressor_generator
      }
      : Fill.t)
   in
